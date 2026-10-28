@@ -600,7 +600,7 @@ uint32_t 	materialFlags;
 	glEnableClientState(GL_VERTEX_ARRAY);				// enable vertex arrays
 	glVertexPointer(3, GL_FLOAT, 0, data->points);		// point to point array
 
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: glVertexPointer!");
 
 			/************************/
@@ -637,7 +637,7 @@ uint32_t 	materialFlags;
 	else
 		glDisableClientState(GL_NORMAL_ARRAY);			// disable normal arrays
 
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: normals!");
 
 
@@ -683,7 +683,7 @@ uint32_t 	materialFlags;
 			glDisableClientState(GL_COLOR_ARRAY);				// no color data at all, so disable
 	}
 
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: color!");
 
 
@@ -877,7 +877,7 @@ use_current:
 
 				useTexture = true;
 
-				if (OGL_CheckError())
+				if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 					DoFatalAlert("MO_DrawGeometry_VertexArray: uv!");
 			}
 		}
@@ -891,7 +891,7 @@ use_current:
 	if (!useTexture)
 	{
 		glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		if (OGL_CheckError())
+		if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 			DoFatalAlert("MO_DrawGeometry_VertexArray: glDisableClientState(GL_TEXTURE_COORD_ARRAY)!");
 	}
 
@@ -906,7 +906,7 @@ go_here:
 //	glLockArraysEXT(0, data->numPoints);
 	glDrawElements(GL_TRIANGLES,data->numTriangles*3,GL_UNSIGNED_INT,&data->triangles[0]);
 
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: glDrawElements");
 //	glUnlockArraysEXT();
 
@@ -1074,7 +1074,7 @@ void MO_DrawMatrix(const MOMatrixObject *matObj)
 
 	glMultMatrixf(matObj->matrix.value);
 
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawMatrix: glMultMatrixf!");
 
 }

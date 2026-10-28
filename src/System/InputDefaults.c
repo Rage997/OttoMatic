@@ -1,11 +1,22 @@
 #include "game.h"
 
-#if __APPLE__
+#if defined(__EMSCRIPTEN__)
+	#define SC_SHOOT1 SDL_SCANCODE_J
+	#define SC_SHOOT2 0
+#elif __APPLE__
 	#define SC_SHOOT1 SDL_SCANCODE_LGUI
 	#define SC_SHOOT2 SDL_SCANCODE_RGUI
 #else
 	#define SC_SHOOT1 SDL_SCANCODE_LCTRL
 	#define SC_SHOOT2 SDL_SCANCODE_RCTRL
+#endif
+
+#ifdef __EMSCRIPTEN__
+	#define SC_PUNCH1 SDL_SCANCODE_K
+	#define SC_PUNCH2 0
+#else
+	#define SC_PUNCH1 SDL_SCANCODE_LALT
+	#define SC_PUNCH2 SDL_SCANCODE_RALT
 #endif
 
 // Scancode
@@ -30,7 +41,7 @@ const KeyBinding kDefaultKeyBindings[NUM_CONTROL_NEEDS] =
 [kNeed_PrevWeapon		] = { { SC(RSHIFT),SC(LEFTBRACKET)	}, MB(WHEELUP)	, { GB(LEFT_SHOULDER)	, GBNULL()				} },
 [kNeed_NextWeapon		] = { { SC(LSHIFT),SC(RIGHTBRACKET)	}, MB(WHEELDOWN), { GB(RIGHT_SHOULDER)	, GBNULL()				} },
 [kNeed_Shoot			] = { { SC_SHOOT1	, SC_SHOOT2		}, MB(LEFT)		, { GB(WEST)			, GAPLUS(RIGHT_TRIGGER)	} },
-[kNeed_PunchPickup		] = { { SC(LALT)	, SC(RALT)		}, MB(MIDDLE)	, { GB(EAST)			, GBNULL()				} },
+[kNeed_PunchPickup		] = { { SC_PUNCH1	, SC_PUNCH2		}, MB(MIDDLE)	, { GB(EAST)			, GBNULL()				} },
 [kNeed_Jump				] = { { SC(SPACE)	, 0				}, MB(RIGHT)	, { GB(SOUTH)			, GBNULL()				} },
 [kNeed_CameraMode		] = { { SC(TAB)		, 0				}, 0			, { GB(RIGHT_STICK)		, GBNULL()				} },
 [kNeed_CameraLeft		] = { { SC(COMMA)	, 0				}, 0			, { GBNULL()			, GBNULL()				} },

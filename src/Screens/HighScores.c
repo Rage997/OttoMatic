@@ -825,8 +825,14 @@ err:
 				/* WRITE DATA */
 
 	count = sizeof(HighScoreType) * NUM_SCORES;
-	FSWrite(refNum, &count, (Ptr) &gHighScores[0]);
+	iErr = FSWrite(refNum, &count, (Ptr) &gHighScores[0]);
 	FSClose(refNum);
+#ifdef __EMSCRIPTEN__
+	if (iErr != noErr || count != sizeof(HighScoreType) * NUM_SCORES)
+		WebShowAlert("Couldn't write high scores.");
+	else
+		WebSyncSave();
+#endif
 
 }
 

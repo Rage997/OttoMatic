@@ -558,8 +558,14 @@ long				count;
 				/* WRITE DATA */
 
 	count = sizeof(PrefsType);
-	FSWrite(refNum, &count, (Ptr) &gGamePrefs);
+	iErr = FSWrite(refNum, &count, (Ptr) &gGamePrefs);
 	FSClose(refNum);
+#ifdef __EMSCRIPTEN__
+	if (iErr != noErr || count != sizeof(PrefsType))
+		WebShowAlert("Couldn't write preferences.");
+	else
+		WebSyncSave();
+#endif
 }
 
 #pragma mark -
@@ -1640,6 +1646,9 @@ Str255			saveFilePath;
 		DoAlert("Couldn't write saved game file.");
 		return false;
 	}
+#ifdef __EMSCRIPTEN__
+	WebSyncSave();
+#endif
 
 	return true;
 }

@@ -23,8 +23,14 @@ extern "C"
 		/* HEADERS */
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_opengl.h>
-#include <SDL3/SDL_opengl_glext.h>
+#include "webplatform.h"
+#ifdef __EMSCRIPTEN__
+	#include <GL/gl.h>
+	#include <GL/glext.h>
+#else
+	#include <SDL3/SDL_opengl.h>
+	#include <SDL3/SDL_opengl_glext.h>
+#endif
 
 #include "Pomme.h"
 

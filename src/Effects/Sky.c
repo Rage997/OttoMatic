@@ -259,7 +259,7 @@ float			u,v;
 	MO_DrawMaterial(gSpriteGroupList[SPRITE_GROUP_LEVELSPECIFIC][0].materialObject);
 
 	glDrawElements(GL_TRIANGLES,NUM_SKY_TRIANGLES*3,GL_UNSIGNED_INT,&gSkyTriangles[0]);
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("DrawSky: glDrawElements");
 
 

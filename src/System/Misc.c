@@ -52,7 +52,11 @@ void DoAlert(const char* format, ...)
 	va_end(args);
 
 	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Game Alert: %s", message);
+#ifdef __EMSCRIPTEN__
+	WebShowAlert(message);
+#else
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, GAME_FULL_NAME, message, gSDLWindow);
+#endif
 }
 
 
@@ -70,7 +74,11 @@ void DoFatalAlert(const char* format, ...)
 	va_end(args);
 
 	SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Game Fatal Alert: %s", message);
+#ifdef __EMSCRIPTEN__
+	WebShowAlert(message);
+#else
 	SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, GAME_FULL_NAME, message, gSDLWindow);
+#endif
 	ExitToShell();
 }
 
@@ -257,7 +265,19 @@ void CalcFramesPerSecond(void)
 		performanceFrequency = SDL_GetPerformanceFrequency();
 	}
 
+#ifdef __EMSCRIPTEN__
+	bool resumed = WebWaitFrame();
+	int width = EM_ASM_INT({ return Module['ottoCanvasWidth'] || 960; });
+	int height = EM_ASM_INT({ return Module['ottoCanvasHeight'] || 600; });
+	int oldWidth, oldHeight;
+	SDL_GetWindowSize(gSDLWindow, &oldWidth, &oldHeight);
+	if (width != oldWidth || height != oldHeight)
+		SDL_SetWindowSize(gSDLWindow, width, height);
+	if (resumed || prevTime == 0)
+		prevTime = SDL_GetPerformanceCounter() - performanceFrequency / 60;
+#else
 slow_down:
+#endif
 	currTime = SDL_GetPerformanceCounter();
 	uint64_t deltaTime = currTime - prevTime;
 
@@ -269,6 +289,7 @@ slow_down:
 	{
 		gFramesPerSecond = performanceFrequency / (float)(deltaTime);
 
+#ifndef __EMSCRIPTEN__
 		if (gFramesPerSecond > MAX_FPS)					// keep from going over 100fps (there were problems in 2.0 of frame rate precision loss)
 		{
 			if (gFramesPerSecond - MAX_FPS > 1000)		// try to sneak in some sleep if we have 1 ms to spare
@@ -277,6 +298,7 @@ slow_down:
 			}
 			goto slow_down;
 		}
+#endif
 
 		if (gFramesPerSecond < MIN_FPS)					// (avoid divide by 0's later)
 		{

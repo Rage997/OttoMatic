@@ -126,6 +126,11 @@ void UpdateInput(void)
 				// On Mac, always restore system mouse accel if cmd-tabbing away from the game
 				SetMacLinearMouse(0);
 				gEatMouse = true;
+#ifdef __EMSCRIPTEN__
+				SDL_ResetKeyboard();
+				SDL_memset(gRawKeyboardState, KEYSTATE_OFF, sizeof(gRawKeyboardState));
+				SDL_memset(gNeedStates, KEYSTATE_OFF, sizeof(gNeedStates));
+#endif
 				break;
 
 			case SDL_EVENT_WINDOW_FOCUS_GAINED:

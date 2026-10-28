@@ -239,7 +239,7 @@ void Enter2D(void)
 {
 	// Linux: work around game window sent to background after showing a dialog box
 	// Windows: work around alert box appearing behind game
-#if !__APPLE__
+#if !__APPLE__ && !defined(__EMSCRIPTEN__)
 	SDL_SetWindowFullscreen(gSDLWindow, false);
 	SDL_HideWindow(gSDLWindow);
 	SDL_PumpEvents();
@@ -251,7 +251,7 @@ void Enter2D(void)
 
 void Exit2D(void)
 {
-#if !__APPLE__
+#if !__APPLE__ && !defined(__EMSCRIPTEN__)
 	SDL_PumpEvents();
 	SDL_ShowWindow(gSDLWindow);
 	SetFullscreenMode(false);
@@ -299,6 +299,11 @@ int GetNumDisplays(void)
 
 void MoveToPreferredDisplay(void)
 {
+#ifdef __EMSCRIPTEN__
+	int width = EM_ASM_INT({ return Module['ottoCanvasWidth'] || 960; });
+	int height = EM_ASM_INT({ return Module['ottoCanvasHeight'] || 600; });
+	SDL_SetWindowSize(gSDLWindow, width, height);
+#else
 	if (gGamePrefs.displayNumMinus1 >= GetNumDisplays())
 	{
 		gGamePrefs.displayNumMinus1 = 0;
@@ -315,12 +320,21 @@ void MoveToPreferredDisplay(void)
 	int centered = SDL_WINDOWPOS_CENTERED_DISPLAY(display);
 	SDL_SetWindowPosition(gSDLWindow, centered, centered);
 	SDL_SyncWindow(gSDLWindow);
+#endif
 }
 
 /*********************** SET FULLSCREEN MODE **********************/
 
 void SetFullscreenMode(bool enforceDisplayPref)
 {
+#ifdef __EMSCRIPTEN__
+	(void) enforceDisplayPref;
+	// Defer requests made by the game's frame loop to the next user gesture.
+	if (gGamePrefs.fullscreen)
+		emscripten_request_fullscreen("#canvas", true);
+	else
+		emscripten_exit_fullscreen();
+#else
 	if (!gGamePrefs.fullscreen)
 	{
 		SDL_SetWindowFullscreen(gSDLWindow, 0);
@@ -351,7 +365,10 @@ void SetFullscreenMode(bool enforceDisplayPref)
 		SDL_SetWindowFullscreen(gSDLWindow, true);
 		SDL_SyncWindow(gSDLWindow);
 	}
+#endif
 
+#ifndef __EMSCRIPTEN__
 	SDL_GL_SetSwapInterval(gGamePrefs.vsync);
+#endif
 	EatMouseEvents();
 }

@@ -11,6 +11,9 @@
 /****************************/
 
 #include "game.h"
+#ifdef __EMSCRIPTEN__
+#include <gl4esinit.h>
+#endif
 
 /****************************/
 /*    PROTOTYPES            */
@@ -202,7 +205,9 @@ void OGL_SetupWindow(OGLSetupInputType *setupDefPtr)
 	OGL_CreateLights(&setupDefPtr->lights);
 	OGL_CheckError();
 
+#ifndef __EMSCRIPTEN__
 	SDL_GL_SetSwapInterval((signed char) gGamePrefs.vsync);
+#endif
 
 
 
@@ -260,7 +265,6 @@ static void OGL_CreateDrawContext(void)
 
 	gAGLContext = SDL_GL_CreateContext(gSDLWindow);
 	GAME_ASSERT_MESSAGE(gAGLContext, SDL_GetError());
-	GAME_ASSERT(glGetError() == GL_NO_ERROR);
 
 			/* ACTIVATE CONTEXT */
 
@@ -275,6 +279,7 @@ static void OGL_CreateDrawContext(void)
 			//
 
 	OGL_InitFunctions();
+	GAME_ASSERT(glGetError() == GL_NO_ERROR);
 
 
 			/* SEE IF SUPPORT 1024x1024 TEXTURES */
@@ -299,6 +304,9 @@ static void OGL_DisposeDrawContext(void)
 		return;
 	}
 
+#ifdef __EMSCRIPTEN__
+	close_gl4es();
+#endif
 	SDL_GL_MakeCurrent(gSDLWindow, NULL);		// make context not current
 	SDL_GL_DestroyContext(gAGLContext);			// nuke context
 	gAGLContext = nil;
@@ -509,6 +517,9 @@ void OGL_DrawScene(void (*drawRoutine)(void))
 	{
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
+#ifdef __EMSCRIPTEN__
+		OGL_CheckError();
+#endif
 		SDL_GL_SwapWindow(gSDLWindow);					// end render loop
 		return;
 	}
@@ -744,6 +755,10 @@ do_anaglyph:
 
            /* SWAP THE BUFFS */
 
+#ifdef __EMSCRIPTEN__
+	// Keep fatal error detection without synchronizing once per mesh operation.
+	OGL_CheckError();
+#endif
 	SDL_GL_SwapWindow(gSDLWindow);					// end render loop
 
 
@@ -1188,15 +1203,16 @@ uint32_t	a;
 void OGL_Texture_SetOpenGLTexture(GLuint textureName)
 {
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("OGL_Texture_SetOpenGLTexture: glPixelStorei failed!");
 
 	glBindTexture(GL_TEXTURE_2D, textureName);
-	if (OGL_CheckError())
+	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("OGL_Texture_SetOpenGLTexture: glBindTexture failed!");
 
 
-	glGetError();
+	if (OGL_CHECK_ERROR_PER_DRAW)
+		glGetError();
 
 	glEnable(GL_TEXTURE_2D);
 }

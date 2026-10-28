@@ -631,7 +631,11 @@ static void NavigatePadBinding(const MenuItem* entry)
 		while (GetNeedState(kNeed_UIConfirm))
 		{
 			UpdateInput();
+#ifdef __EMSCRIPTEN__
+			WebWaitFrame();
+#else
 			SDL_Delay(30);
+#endif
 		}
 
 		gMenuState = kMenuStateAwaitingPadPress;
@@ -662,7 +666,11 @@ static void NavigateMouseBinding(const MenuItem* entry)
 		while (GetNeedState(kNeed_UIConfirm))
 		{
 			UpdateInput();
+#ifdef __EMSCRIPTEN__
+			WebWaitFrame();
+#else
 			SDL_Delay(30);
+#endif
 		}
 
 		gMenuState = kMenuStateAwaitingMouseClick;

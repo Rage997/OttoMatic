@@ -12,10 +12,12 @@
 /*                       CALLBACKS                             */
 /***************************************************************/
 
+#ifndef __EMSCRIPTEN__
 static void cb_Fullscreen(void)
 {
 	SetFullscreenMode(true);
 }
+#endif
 
 static void cb_SetLanguage(void)
 {
@@ -75,6 +77,7 @@ static const char* GenerateGamepadLabel(void)
 		return Localize(STR_NO_GAMEPAD_DETECTED);
 }
 
+#ifndef __EMSCRIPTEN__
 static uint8_t GenerateNumDisplays(void)
 {
 	int numDisplays = GetNumDisplays();
@@ -86,6 +89,7 @@ static const char* GenerateDisplayName(char* buf, int bufSize, Byte value)
 	SDL_snprintf(buf, bufSize, "%s %d", Localize(STR_DISPLAY), 1 + (int)value);
 	return buf;
 }
+#endif
 
 static const char* GenerateCurrentLanguageName(char* buf, int bufSize, Byte value)
 {
@@ -372,6 +376,7 @@ static const MenuItem gSettingsMenu[] =
 
 	{ .type = kMenuItem_Spacer },
 
+#ifndef __EMSCRIPTEN__
 	{
 		.type = kMenuItem_Cycler,
 		.text = STR_FULLSCREEN,
@@ -418,6 +423,7 @@ static const MenuItem gSettingsMenu[] =
 			.choices = {STR_OFF, STR_MSAA_2X, STR_MSAA_4X, STR_MSAA_8X},
 		}
 	},
+#endif
 
 	{
 		.type = kMenuItem_Cycler,

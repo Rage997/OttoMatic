@@ -261,6 +261,14 @@ GLuint OGL_TextureMap_LoadTGA(const char* path, int flags, int* width, int* heig
 GLenum _OGL_CheckError(const char* file, int line);
 #define OGL_CheckError() _OGL_CheckError(__FILE__, __LINE__)
 
+// WebGL getError synchronizes with the browser's graphics process. Web release
+// builds check at the OGL_DrawScene boundary; debug/native keep per-draw checks.
+#if defined(__EMSCRIPTEN__) && !_DEBUG
+#define OGL_CHECK_ERROR_PER_DRAW 0
+#else
+#define OGL_CHECK_ERROR_PER_DRAW 1
+#endif
+
 void OGL_GetCurrentViewport(int *x, int *y, int *w, int *h);
 
 void OGL_PushState(void);

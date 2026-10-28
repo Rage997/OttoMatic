@@ -87,6 +87,12 @@ static void Boot(int argc, char** argv)
 
 	// Load game prefs before starting
 	LoadPrefs();
+#ifdef __EMSCRIPTEN__
+	// Browser fullscreen requires a fresh user gesture; never restore it at boot.
+	gGamePrefs.fullscreen = false;
+	SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0"); // frame pacing yields explicitly
+	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
+#endif
 
 retryVideo:
 	// Initialize SDL video subsystem
@@ -96,8 +102,13 @@ retryVideo:
 	}
 
 	// Create window
+#ifdef __EMSCRIPTEN__
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+#else
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+#endif
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
 	gCurrentAntialiasingLevel = gGamePrefs.antialiasingLevel;
@@ -133,7 +144,11 @@ retryVideo:
 	auto gamecontrollerdbPath8 = (dataPath / "System" / "gamecontrollerdb.txt").u8string();
 	if (-1 == SDL_AddGamepadMappingsFromFile((const char*)gamecontrollerdbPath8.c_str()))
 	{
+#ifdef __EMSCRIPTEN__
+		WebShowAlert("Couldn't load gamecontrollerdb.txt!");
+#else
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, GAME_FULL_NAME, "Couldn't load gamecontrollerdb.txt!", gSDLWindow);
+#endif
 	}
 }
 
@@ -187,8 +202,15 @@ int main(int argc, char** argv)
 	if (!success)
 	{
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Uncaught exception: %s", uncaught.c_str());
+#ifdef __EMSCRIPTEN__
+		WebShowAlert(uncaught.c_str());
+#else
 		SDL_ShowSimpleMessageBox(0, GAME_FULL_NAME, uncaught.c_str(), nullptr);
+#endif
 	}
+#ifdef __EMSCRIPTEN__
+	EM_ASM({ Module['ottoQuit'](); });
+#endif
 
 	return success ? 0 : 1;
 }
