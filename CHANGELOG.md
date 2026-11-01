@@ -4,9 +4,15 @@
 
 - Ported to SDL 3
 - **NOTE:** The Mac version now requires macOS 10.13.
-- Moved browser sound playback and mixing off the rendering thread so long frames no longer drain the audio queue.
+- Added a browser version with local saves, fullscreen, and pause on focus loss.
+- Added a Macintosh-style loading screen and browser-friendly controls.
 - Retain browser geometry buffers and batch consecutive sparkle draws to reduce uploads and draw submissions.
+- Browser rendering follows page size and display pixel density without resolution caps or graphics presets.
+- Moved browser sound playback and mixing off the rendering thread so long frames no longer drain the audio queue.
+- Added content-versioned JavaScript/WASM URLs to prevent stale browser executables after rebuilding.
 - Fixed undersized vapor-trail vertex buffers that could crash browser gameplay with an OpenGL error.
+- Added optional GitHub Pages deployment.
+- Aligned web build filenames with the other ports.
 
 ## **4.0.1** (Jan 2023)
 

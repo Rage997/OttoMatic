@@ -1,0 +1,40 @@
+diff --git a/src/gl/glstate.c b/src/gl/glstate.c
+--- a/src/gl/glstate.c
++++ b/src/gl/glstate.c
+@@ -231,6 +231,12 @@
+         /*k = kh_put(tex, list, 0, &ret);
+         glstate->texture.zero = tex = kh_value(list, k) = malloc(sizeof(gltexture_t));*/
+         glstate->texture.zero = tex = calloc(1, sizeof(gltexture_t));
++#ifdef __EMSCRIPTEN__
++        // WebGL has no default texture object. Back desktop texture zero with
++        // a real object so sampler realization remains valid after deletion.
++        LOAD_GLES(glGenTextures);
++        gles_glGenTextures(1, &tex->glname);
++#endif
+         tex->adjustxy[0] = tex->adjustxy[1] = 1.f;
+         tex->mipmap_auto = (globals4es.automipmap==1);
+         tex->mipmap_need = (globals4es.automipmap==1)?1:0;
+@@ -509,7 +515,11 @@
+     }
+     #undef free_hashmap
+     // free texture zero as it's not in the list anymore
++#ifdef __EMSCRIPTEN__
++    free_texture(state->texture.zero);
++#else
+     free(state->texture.zero);
++#endif
+     // free eval maps
+     #define freemap(dims, name)                              \
+     { map_statef_t *m = (map_statef_t *)state->map##dims.name; \
+diff --git a/src/gl/texture_params.c b/src/gl/texture_params.c
+--- a/src/gl/texture_params.c
++++ b/src/gl/texture_params.c
+@@ -924,7 +924,7 @@
+             }
+         }
+         // check, if drawing, if mipmap needs some special care...
+-        if(drawing) {
++        if(drawing && tex->width > 0 && tex->height > 0) {
+             if((globals4es.automipmap==3) || ((globals4es.automipmap==1) && (tex->mipmap_auto==0)) || (tex->compressed && (tex->mipmap_auto==0)))
+                 tex->mipmap_need = 0;
+             else

@@ -1,0 +1,73 @@
+name: Web build
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy to GitHub Pages (enable Pages with GitHub Actions first)
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'web/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/WebBuild.yml'
+      - '.gitmodules'
+      - 'extern/Pomme'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Emscripten 4.0.23
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
+      - name: Build browser game
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web --parallel 2
+      - name: Stage static site
+        run: |
+          mkdir -p _site
+          cp build-web/OttoMatic.html _site/index.html
+          cp build-web/OttoMatic.{js,wasm} build-web/*.data _site/
+          cp build-web/*LICENSE* _site/
+          cp -R build-web/web-assets _site/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OttoMatic-web
+          path: _site/
+          if-no-files-found: error
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy
+        with:
+          path: _site/
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

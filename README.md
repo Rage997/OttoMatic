@@ -22,6 +22,16 @@ Pangea Software allowed me to update the original game to keep it running on tod
 
 This update aims to be faithful to the original. Elements of the presentation and handling were slightly updated.
 
+## Web version
+
+**[Play Otto Matic in your browser](https://niccolozuppichini.com/OttoMatic/)**
+
+Play in a WebGL 2 browser with a keyboard or gamepad. Click **Play** to enable
+sound; **J** shoots and **K** punches. No touch controls.
+
+The first download is about 200 MB. Saves stay in your browser.
+See [build and hosting instructions](BUILD.md#build-and-run-in-a-browser).
+
 ## Credits
 
 - Programming and Game Design: Brian Greenstone

@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#202a2d">
+<title>Otto Matic — Play in your browser</title>
+<link rel="preload" href="web-assets/mac-background.webp" as="image" fetchpriority="high">
+<style>
+:root { color-scheme: dark; font-family: "Courier New", ui-monospace, monospace; color: #bfd7c7; background: #202a2d; --phosphor: #bfd7c7; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible { outline: 2px solid var(--phosphor); outline-offset: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+#canvas { display: block; position: fixed; inset: 0; width: 100% !important; height: 100% !important; outline: none; background: #000; }
+#launcher {
+  position: fixed; inset: 0; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; overflow: hidden;
+  background: #202a2d; transition: opacity .6s ease, visibility 0s;
+}
+body[data-state="playing"] #launcher { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .6s ease, visibility 0s .6s; }
+.mac-stage { position: relative; width: min(100vw, 160svh); aspect-ratio: 8 / 5; flex: none; }
+.mac-render {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+  mask-image: linear-gradient(to bottom, transparent, #000 8%, #000 97%, transparent),
+    linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-composite: intersect;
+}
+.crt {
+  position: absolute; left: 38.07737%; top: 20.66485%; width: 24.26546%; height: 32.70183%;
+  container-type: inline-size; overflow: hidden; color: var(--phosphor); mix-blend-mode: screen;
+  mask: url("web-assets/crt-mask.png") 0 0 / 100% 100% no-repeat;
+}
+.crt-splash { position: absolute; inset: 0; width: 100%; height: 100%; }
+.crt::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  background: repeating-linear-gradient(transparent 0 2px, #00000016 2px 3px);
+  box-shadow: inset 0 0 2.5cqw 1cqw #0009;
+}
+.copyright { position: absolute; top: 90.7%; width: 100%; margin: 0; text-align: center; font-size: max(8px, 2.6cqw); line-height: 1.3; color: #9db7a5; }
+.credits { position: absolute; top: 95.5%; width: 100%; margin: 0; text-align: center; font-size: max(7px, 2.1cqw); line-height: 1.3; }
+.credits a { color: #9db7a5; text-underline-offset: 2px; }
+progress {
+  position: absolute; left: 19.79%; top: 73.53%; width: 60.42%; height: 3.55%; min-height: 8px;
+  display: block; appearance: none; border: 1px solid var(--phosphor); border-radius: 0;
+  padding: 2px; background: transparent; color: var(--phosphor);
+}
+progress::-webkit-progress-bar { background: transparent; }
+progress::-webkit-progress-value { background: repeating-linear-gradient(90deg, var(--phosphor) 0 1.4cqw, transparent 1.4cqw 2cqw); }
+progress::-moz-progress-bar { background: repeating-linear-gradient(90deg, var(--phosphor) 0 1.4cqw, transparent 1.4cqw 2cqw); }
+progress:not([value]) { background: linear-gradient(90deg, transparent 0 38%, #bfd7c766 38% 62%, transparent 62%); background-size: 250% 100%; animation: searching 1.6s linear infinite; }
+.load-status { position: absolute; top: 80.9%; left: 8%; width: 84%; display: flex; justify-content: center; gap: 1ch; font-size: max(9px, 3cqw); line-height: 1.4; text-align: center; }
+#status { margin: 0; }
+#download-detail { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.actions { position: absolute; bottom: 15%; left: 14%; width: 72%; z-index: 4; display: flex; gap: 10px; justify-content: center; }
+.primary, .secondary { min-height: 44px; width: 100%; border-radius: 0; font-size: max(11px, 3.5cqw); font-weight: 700; }
+.primary { border: 1px solid var(--phosphor); color: #112019; background: var(--phosphor); }
+.primary:hover { background: #e0f0e5; }
+.secondary { border: 1px solid var(--phosphor); color: var(--phosphor); background: transparent; }
+.secondary:hover { background: #bfd7c722; }
+#launch-hint { display: none; }
+body:is([data-state="ready"], [data-state="error"], [data-state="ended"]) #launch-hint {
+  display: block; position: absolute; top: 57%; left: 8%; width: 84%; margin: 0; text-align: center; font-size: max(9px, 3cqw);
+}
+body[data-state="ready"] .load-status, body[data-state="ready"] #launch-hint { display: none; }
+#storage {
+  position: fixed; z-index: 3; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px; font: 12px/1.5 system-ui, sans-serif; color: #e0c996; background: #102019f5;
+}
+#save-status { margin: 0; }
+#save-status.error { color: #ffb4ab; }
+#retry-save { font: 12px system-ui, sans-serif; padding: 4px 10px; border: 1px solid #e0c996; border-radius: 3px; color: #e0c996; background: transparent; }
+#retry-save:hover { background: #e0c99622; }
+#fullscreen {
+  position: fixed; z-index: 4; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
+  padding: 10px 16px; border: 1px solid #b8c89755; border-radius: 3px; color: #e1e8cf; background: #0a1613de; font-size: 12px;
+}
+#notice {
+  position: fixed; z-index: 4; bottom: max(64px, calc(env(safe-area-inset-bottom) + 52px)); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 20px; padding: 14px 18px;
+  color: #e7d3a0; background: #102019f5; border: 1px solid #83946b70; border-radius: 4px; box-shadow: 0 8px 30px #0005;
+  font-size: 12px; line-height: 1.5;
+}
+#resume { padding: 8px 12px; border: 1px solid var(--phosphor); color: #112019; background: var(--phosphor); white-space: nowrap; }
+#dismiss-notice { background: none; color: #e7d3a0; border: none; text-decoration: underline; text-underline-offset: 3px; font-size: 11px; }
+.noscript { position: absolute; bottom: 12px; width: 100%; margin: 0; text-align: center; color: #aab6d0; font: 13px system-ui, sans-serif; }
+body:is([data-state="error"], [data-state="ended"]) .crt { background: #0b1812; mix-blend-mode: normal; }
+body:is([data-state="error"], [data-state="ended"]) .crt-splash { opacity: .12; }
+body:is([data-state="error"], [data-state="ended"]) .load-status { display: block; top: 16%; max-height: 40%; overflow: auto; font-size: max(11px, 4cqw); }
+body[data-state="error"] #status { color: #f0c197; }
+@keyframes searching { to { background-position: 167% 0; } }
+@media (max-aspect-ratio: 4 / 5) {
+  /* Crop the studio margins, not the computer. Screen coordinates stay unchanged. */
+  .mac-stage { width: min(260vw, 160svh); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body data-state="loading">
+<canvas id="canvas" width="960" height="600" tabindex="0" aria-label="Otto Matic game"></canvas>
+<main id="launcher" aria-label="Otto Matic launcher">
+  <div class="mac-stage">
+    <img class="mac-render" src="web-assets/mac-background.webp" width="1600" height="1000" alt="A vintage Macintosh with keyboard and mouse" fetchpriority="high">
+    <section class="crt" aria-labelledby="game-title">
+      <h1 id="game-title" class="sr-only">Otto Matic</h1>
+      <img class="crt-splash" src="web-assets/ottomatic-splash.png" width="960" height="816" alt="" aria-hidden="true" fetchpriority="high">
+      <progress id="progress" aria-label="Downloading Otto Matic game assets" max="100"></progress>
+      <div class="load-status"><p id="status" role="status">Loading game…</p><span id="download-detail"></span></div>
+      <div class="actions" id="actions" hidden><button class="primary" id="play" hidden>Play</button><button class="secondary" id="restart" hidden>Reload game</button></div>
+      <p id="launch-hint"></p>
+      <p class="copyright">© 2001 Pangea Software, Inc.</p>
+      <p class="credits"><a href="https://github.com/Rage997/OttoMatic" target="_blank" rel="noopener">Source code</a> · <a href="LICENSE.md" target="_blank" rel="noopener" title="CC BY-NC-SA 4.0">License</a></p>
+    </section>
+  </div>
+  <noscript><p class="noscript">JavaScript and WebAssembly must be enabled to play.</p></noscript>
+</main>
+<button id="fullscreen" hidden>Fullscreen</button>
+<div id="storage" role="status" hidden><p id="save-status"></p><button id="retry-save" hidden>Retry save</button></div>
+<aside id="notice" hidden><span id="notice-text" role="status"></span><button id="resume" hidden>Resume game</button><button id="dismiss-notice" aria-label="Dismiss notification">Dismiss</button></aside>
+<script>
+'use strict';
+var Module = {
+  canvas: document.getElementById('canvas'),
+  noInitialRun: true,
+  ottoPaused: false,
+  preRun: [],
+  locateFile: (path, prefix) => path === 'OttoMatic.wasm'
+    ? prefix + 'OttoMatic.wasm?v=__OTTO_WASM_VERSION__'
+    : prefix + path,
+};
+(() => {
+  const canvas = Module.canvas;
+  const launcher = document.getElementById('launcher');
+  const statusLine = document.getElementById('status');
+  const downloadDetail = document.getElementById('download-detail');
+  const storage = document.getElementById('storage');
+  const saveStatus = document.getElementById('save-status');
+  const retrySave = document.getElementById('retry-save');
+  const progress = document.getElementById('progress');
+  const play = document.getElementById('play');
+  const restart = document.getElementById('restart');
+  const actions = document.getElementById('actions');
+  const launchHint = document.getElementById('launch-hint');
+  const fullscreen = document.getElementById('fullscreen');
+  const notice = document.getElementById('notice');
+  const resume = document.getElementById('resume');
+  let ready = false, started = false, stopped = false, failed = false, storageReady = false;
+  let dirty = false, syncing = false, saveFailed = false;
+  let noticeTimer;
+
+  function notify(message, temporary = false) {
+    clearTimeout(noticeTimer);
+    document.getElementById('notice-text').textContent = message;
+    notice.hidden = false;
+    if (temporary) noticeTimer = setTimeout(() => { notice.hidden = true; }, 6000);
+  }
+  // In play the launcher is hidden, so status messages surface as a notice instead.
+  function setStatusLine(message) {
+    if (started && !failed && !stopped) notify(message);
+    else statusLine.textContent = message;
+  }
+  function fail(message) {
+    if (failed) return;
+    failed = true;
+    launcher.inert = false;
+    document.body.dataset.state = 'error';
+    statusLine.textContent = String(message);
+    progress.hidden = true;
+    downloadDetail.textContent = '';
+    launchHint.textContent = 'Reload the game to try again.';
+    actions.hidden = false;
+    play.hidden = true;
+    restart.textContent = 'Reload game';
+    restart.hidden = false;
+    fullscreen.hidden = true;
+    resume.hidden = true;
+    notice.hidden = true;
+    restart.focus({preventScroll: true});
+  }
+  Module.ottoStatus = (message, error) => {
+    if (error) fail(message);
+    else if (!failed) setStatusLine(message);
+  };
+  Module.setStatus = message => {
+    if (started || failed || ready) return;
+    const download = /\((\d+)\/(\d+)\)/.exec(message);
+    if (download) {
+      const loaded = Number(download[1]), total = Number(download[2]);
+      if (total > 0) {
+        progress.value = Math.min(100, loaded / total * 100);
+        downloadDetail.textContent = `${Math.floor(progress.value)}%`;
+        statusLine.textContent = 'Loading…';
+      }
+    } else if (message === 'Downloading data...') statusLine.textContent = 'Loading…';
+    else if (message) statusLine.textContent = message;
+  };
+  Module.print = (...args) => console.log(...args);
+  Module.printErr = (...args) => console.error(...args);
+  Module.onAbort = reason => fail(`Game stopped: ${reason}`);
+
+  function flushSave() {
+    if (!storageReady || syncing || !dirty) return;
+    dirty = false;
+    syncing = true;
+    storage.hidden = false;
+    saveStatus.textContent = 'Saving… Keep this tab open.';
+    Module.FS.syncfs(false, error => {
+      syncing = false;
+      if (error) {
+        saveFailed = true;
+        dirty = true;
+        saveStatus.classList.add('error');
+        saveStatus.textContent = 'Save failed. Keep this tab open and use Retry save.';
+        retrySave.hidden = false;
+        console.error('Save persistence failed', error);
+        return;
+      }
+      saveFailed = false;
+      saveStatus.classList.remove('error');
+      retrySave.hidden = true;
+      if (dirty) flushSave();
+      else saveStatus.textContent = 'Saved in this browser.';
+    });
+  }
+  retrySave.addEventListener('click', flushSave);
+  Module.ottoSyncSave = () => { dirty = true; flushSave(); };
+  Module.preRun.push(() => {
+    const dependency = 'otto-persistent-storage';
+    Module.addRunDependency(dependency);
+    try {
+      Module.FS.mkdir('/storage');
+      Module.FS.mount(Module.IDBFS, {}, '/storage');
+      Module.ENV.XDG_CONFIG_HOME = '/storage';
+      Module.FS.syncfs(true, error => {
+        if (error) {
+          fail('Could not restore browser saves. Allow site storage, then reload. Existing saves have not been overwritten.');
+          console.error(error);
+          return;
+        }
+        storageReady = true;
+        Module.removeRunDependency(dependency);
+      });
+    } catch (error) {
+      fail(`Could not initialize browser save storage: ${error.message}`);
+    }
+  });
+  Module.onRuntimeInitialized = () => {
+    if (failed || !storageReady) return;
+    ready = true;
+    progress.value = 100;
+    progress.hidden = true;
+    downloadDetail.textContent = '';
+    document.body.dataset.state = 'ready';
+    actions.hidden = false;
+    play.hidden = false;
+    launchHint.textContent = 'Click Play to start the game and enable sound.';
+    statusLine.textContent = 'Ready to play.';
+    play.focus({preventScroll: true});
+  };
+  function resumeAudio() {
+    const audio = Module.ottoAudio?.context;
+    if (audio?.state === 'suspended') audio.resume().catch(error => {
+      if (!failed) setStatusLine('Sound is paused. Click the game to resume audio.');
+      console.warn(error);
+    });
+  }
+  function updatePause() {
+    if (!started || stopped) return;
+    Module.ottoPaused = document.hidden || !document.hasFocus() || document.activeElement !== canvas;
+    resume.hidden = failed || !Module.ottoPaused;
+    const audio = Module.ottoAudio?.context;
+    if (Module.ottoPaused) {
+      if (audio?.state === 'running') audio.suspend().catch(console.warn);
+      if (!failed) notify('Paused — click or focus the game to resume.');
+    } else {
+      notice.hidden = true;
+      resumeAudio();
+      window.dispatchEvent(new Event('otto-resume'));
+    }
+  }
+  function focusGame() { canvas.focus(); updatePause(); }
+  play.addEventListener('click', () => {
+    if (!ready || started || failed) return;
+    started = true;
+    document.body.dataset.state = 'launching';
+    fullscreen.hidden = false;
+    focusGame();
+    try { Module.callMain([]); }
+    catch (error) { if (error !== 'unwind') fail(error.message || String(error)); }
+    resumeAudio();
+    // Let the original game paint before revealing it beneath the launcher.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (failed || stopped) return;
+      launcher.inert = true;
+      document.body.dataset.state = 'playing';
+      canvas.focus({preventScroll: true});
+    }));
+  });
+  Module.ottoQuit = () => {
+    stopped = true;
+    Module.ottoSyncSave();
+    fullscreen.hidden = true;
+    resume.hidden = true;
+    if (failed) return;
+    launcher.inert = false;
+    document.body.dataset.state = 'ended';
+    statusLine.textContent = 'Game closed.';
+    progress.hidden = true;
+    downloadDetail.textContent = '';
+    launchHint.textContent = 'Thanks for playing. Reload to play again.';
+    actions.hidden = false;
+    play.hidden = true;
+    restart.textContent = 'Play again';
+    restart.hidden = false;
+    restart.focus({preventScroll: true});
+  };
+  resume.addEventListener('click', focusGame);
+  canvas.addEventListener('pointerdown', focusGame);
+  canvas.addEventListener('focus', updatePause);
+  canvas.addEventListener('blur', updatePause);
+  window.addEventListener('focus', updatePause);
+  window.addEventListener('blur', updatePause);
+  document.addEventListener('visibilitychange', updatePause);
+  canvas.addEventListener('contextmenu', event => event.preventDefault());
+  canvas.addEventListener('keydown', event => {
+    if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(event.code)) event.preventDefault();
+  });
+  fullscreen.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+      focusGame();
+    } catch (error) {
+      if (!failed) setStatusLine(`Fullscreen unavailable: ${error.message}`);
+    }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    fullscreen.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+    if (started && !stopped) focusGame();
+  });
+  restart.addEventListener('click', () => location.reload());
+  document.getElementById('dismiss-notice').addEventListener('click', () => {
+    notice.hidden = true;
+    if (started && !failed && !stopped) canvas.focus({preventScroll: true});
+  });
+  window.addEventListener('beforeunload', event => {
+    if (dirty || syncing || saveFailed) { event.preventDefault(); event.returnValue = ''; }
+  });
+  canvas.addEventListener('webglcontextlost', event => {
+    event.preventDefault();
+    fail('The graphics context was lost. Reload the game to continue.');
+    Module.ottoPaused = true;
+  });
+  window.addEventListener('error', event => fail(event.message || 'A game file could not be loaded. Reload to try again.'), true);
+  window.addEventListener('unhandledrejection', event => fail(event.reason?.message || String(event.reason)));
+  let pixelRatio;
+  function updateRenderSize(notifySDL = false) {
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const ratio = window.devicePixelRatio || 1;
+    const changed = Module.ottoCanvasWidth !== width || Module.ottoCanvasHeight !== height || pixelRatio !== ratio;
+    // Keep logical input coordinates in CSS pixels; SDL uses devicePixelRatio
+    // for the full-resolution drawable.
+    Module.ottoCanvasWidth = width;
+    Module.ottoCanvasHeight = height;
+    pixelRatio = ratio;
+    if (changed && notifySDL && started && !stopped) window.dispatchEvent(new Event('resize'));
+  }
+  window.addEventListener('resize', () => updateRenderSize());
+  document.addEventListener('fullscreenchange', () => updateRenderSize(true));
+  new ResizeObserver(() => updateRenderSize(true)).observe(canvas);
+  function watchPixelRatio() {
+    matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`).addEventListener('change', () => {
+      updateRenderSize(true);
+      watchPixelRatio();
+    }, {once: true});
+  }
+  watchPixelRatio();
+  updateRenderSize();
+})();
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

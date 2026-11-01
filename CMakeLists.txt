@@ -78,7 +78,19 @@ if(NOT DEFINED SDL3_DIR)
 	unset(_sdl3_maybe)
 endif()
 
-if(NOT BUILD_SDL_FROM_SOURCE)
+if(EMSCRIPTEN)
+	cmake_minimum_required(VERSION 3.24)
+	include(FetchContent)
+	set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+	set(SDL_STATIC ON CACHE BOOL "" FORCE)
+	set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+	FetchContent_Declare(SDL3
+		# Use unmodified SDL, separate from older build trees with local patches.
+		SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/sdl3-upstream-src"
+		GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+		GIT_TAG f5e5f6588921eed3d7d048ce43d9eb1ff0da0ffc) # release-3.2.30
+	FetchContent_MakeAvailable(SDL3)
+elseif(NOT BUILD_SDL_FROM_SOURCE)
 	find_package(SDL3 CONFIG REQUIRED)
 	message("Found pre-built SDL3")
 else()
@@ -102,7 +114,9 @@ if(EMSCRIPTEN)
 	target_sources(Pomme PRIVATE "${CMAKE_SOURCE_DIR}/web/PommeAudio.cpp")
 endif()
 
-find_package(OpenGL REQUIRED)
+if(NOT EMSCRIPTEN)
+	find_package(OpenGL REQUIRED)
+endif()
 
 #------------------------------------------------------------------------------
 # EXECUTABLE TARGET
@@ -217,7 +231,97 @@ else()
 endif()
 
 # Link core dependencies
-target_link_libraries(${GAME_TARGET} PRIVATE Pomme OpenGL::GL)
+target_link_libraries(${GAME_TARGET} PRIVATE Pomme)
+if(EMSCRIPTEN)
+	# gl4es implements the fixed-function renderer over GLES2/WebGL. Its namespaced
+	# entrypoints keep the game's desktop GL calls separate from the GLES backend.
+	set(NOX11 ON CACHE BOOL "" FORCE)
+	set(NOEGL ON CACHE BOOL "" FORCE)
+	set(STATICLIB ON CACHE BOOL "" FORCE)
+	set(NO_LOADER ON CACHE BOOL "" FORCE)
+	set(NO_INIT_CONSTRUCTOR ON CACHE BOOL "" FORCE)
+	FetchContent_Declare(gl4es
+		GIT_REPOSITORY https://github.com/ptitSeb/gl4es.git
+		GIT_TAG 2037865590d410bcd7b8d1f22b841472ed6d39ac
+		PATCH_COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=<SOURCE_DIR>"
+			-P "${CMAKE_SOURCE_DIR}/web/PatchGL4ES.cmake")
+	FetchContent_MakeAvailable(gl4es)
+	set_target_properties(GL PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+	target_include_directories(${GAME_TARGET} BEFORE PRIVATE "${gl4es_SOURCE_DIR}/include")
+	target_link_libraries(${GAME_TARGET} PRIVATE GL)
+
+	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+	set(WEB_OUTPUT_DIR "${CMAKE_BINARY_DIR}")
+	file(MAKE_DIRECTORY "${WEB_OUTPUT_DIR}")
+	set_target_properties(${GAME_TARGET} PROPERTIES
+		OUTPUT_NAME "${GAME_TARGET}"
+		SUFFIX ".html"
+		RUNTIME_OUTPUT_DIRECTORY "${WEB_OUTPUT_DIR}")
+
+	target_link_options(${GAME_TARGET} PRIVATE
+		"--shell-file=${CMAKE_SOURCE_DIR}/packaging/web.html"
+		"SHELL:--pre-js \"${CMAKE_SOURCE_DIR}/web/audio.js\""
+		-sFULL_ES2=1
+		-sMAX_WEBGL_VERSION=2
+		-sMIN_WEBGL_VERSION=2
+		-sASYNCIFY=1
+		-sASYNCIFY_STACK_SIZE=131072
+		-sSTACK_SIZE=1048576
+		-sALLOW_MEMORY_GROWTH=1
+		-sMAXIMUM_MEMORY=1073741824
+		-sDISABLE_EXCEPTION_CATCHING=0
+		-sASSERTIONS=1
+		"-sEXPORTED_RUNTIME_METHODS=['callMain','FS','FS_createPath','FS_createDataFile','IDBFS','ENV','addRunDependency','removeRunDependency']"
+		-lidbfs.js)
+
+	# Separate packages avoid a single 200 MB download/file. Keep the original
+	# paths (including resource-fork sidecars) for Pomme's synchronous file API.
+	set(WEB_PACKAGES)
+	foreach(GROUP Audio Models Skeletons Sprites System Terrain)
+		set(PACKAGE "${WEB_OUTPUT_DIR}/${GROUP}.data")
+		set(LOADER "${CMAKE_CURRENT_BINARY_DIR}/${GROUP}-preload.js")
+		file(GLOB_RECURSE ASSETS CONFIGURE_DEPENDS "${GAME_DATADIR}/${GROUP}/*")
+		add_custom_command(OUTPUT "${PACKAGE}" "${LOADER}"
+			COMMAND "${Python3_EXECUTABLE}" "${EMSCRIPTEN_ROOT_PATH}/tools/file_packager.py"
+				"${PACKAGE}" --preload "${GAME_DATADIR}/${GROUP}@/Data/${GROUP}"
+				"--js-output=${LOADER}"
+			DEPENDS ${ASSETS}
+			VERBATIM)
+		list(APPEND WEB_PACKAGES "${PACKAGE}" "${LOADER}")
+		target_link_options(${GAME_TARGET} PRIVATE "SHELL:--pre-js \"${LOADER}\"")
+		set_property(TARGET ${GAME_TARGET} APPEND PROPERTY LINK_DEPENDS "${LOADER}")
+	endforeach()
+	# The launcher artwork ships with the site so the page stays fully static.
+	set(WEB_ASSETS_DIR "${WEB_OUTPUT_DIR}/web-assets")
+	set(WEB_ASSETS mac-background.webp crt-mask.png ottomatic-splash.png)
+	file(MAKE_DIRECTORY "${WEB_ASSETS_DIR}")
+	foreach(ASSET IN LISTS WEB_ASSETS)
+		configure_file("${CMAKE_SOURCE_DIR}/packaging/web-assets/${ASSET}"
+			"${WEB_ASSETS_DIR}/${ASSET}" COPYONLY)
+	endforeach()
+	set(WEB_ASSET_FILES)
+	foreach(ASSET IN LISTS WEB_ASSETS)
+		list(APPEND WEB_ASSET_FILES "${WEB_ASSETS_DIR}/${ASSET}")
+	endforeach()
+	add_custom_target(WebAssets DEPENDS ${WEB_PACKAGES} ${WEB_ASSET_FILES})
+	add_dependencies(${GAME_TARGET} WebAssets)
+	set_property(TARGET ${GAME_TARGET} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/packaging/web.html")
+	set_property(TARGET ${GAME_TARGET} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/web/audio.js")
+	set_property(TARGET ${GAME_TARGET} APPEND PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/web/FinalizeWeb.cmake")
+	add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
+		COMMAND "${CMAKE_COMMAND}" "-DWEB_OUTPUT_DIR=${WEB_OUTPUT_DIR}" "-DGAME_TARGET=${GAME_TARGET}"
+			-P "${CMAKE_SOURCE_DIR}/web/FinalizeWeb.cmake"
+		VERBATIM)
+
+	configure_file("${CMAKE_SOURCE_DIR}/LICENSE.md" "${WEB_OUTPUT_DIR}/LICENSE.md" COPYONLY)
+	configure_file("${CMAKE_SOURCE_DIR}/extern/Pomme/LICENSE.md" "${WEB_OUTPUT_DIR}/Pomme-LICENSE.md" COPYONLY)
+	configure_file("${sdl3_SOURCE_DIR}/LICENSE.txt" "${WEB_OUTPUT_DIR}/SDL-LICENSE.txt" COPYONLY)
+
+	configure_file("${gl4es_SOURCE_DIR}/LICENSE" "${WEB_OUTPUT_DIR}/gl4es-LICENSE.txt" COPYONLY)
+else()
+	target_link_libraries(${GAME_TARGET} PRIVATE OpenGL::GL)
+endif()
 
 # Add required frameworks for KillMacMouseAcceleration
 if(APPLE)
@@ -290,8 +394,10 @@ else()
 	set(GAME_DATA_TARGET_LOCATION "$<TARGET_FILE_DIR:${GAME_TARGET}>/Data")
 endif()
 
-add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_directory "${GAME_DATADIR}" "${GAME_DATA_TARGET_LOCATION}")
+if(NOT EMSCRIPTEN)
+	add_custom_command(TARGET ${GAME_TARGET} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory "${GAME_DATADIR}" "${GAME_DATA_TARGET_LOCATION}")
+endif()
 
 if(APPLE)
 	set(INFO_PLIST "${GAME_DATA_TARGET_LOCATION}/../Info.plist")
