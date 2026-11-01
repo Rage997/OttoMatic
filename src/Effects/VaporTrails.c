@@ -466,7 +466,8 @@ float	size,dist;
 
 	GAME_ASSERT(gVaporTrails[i].numSegments <= MAX_TRAIL_SEGMENTS);
 
-	gSmokeColumnMesh.numPoints 		= 2 * (trail->numSegments-1);
+	// Each trail point supplies a vertex pair, including the final endpoint.
+	gSmokeColumnMesh.numPoints 		= 2 * trail->numSegments;
 	gSmokeColumnMesh.numTriangles 	= 2 * (trail->numSegments-1);
 
 

@@ -330,6 +330,10 @@ int	i;
 			/* INIT THE DATA */
 
 	geoObj->objectData = *data;									// copy from input data
+#ifdef __EMSCRIPTEN__
+	geoObj->retainBuffers = false;
+	SDL_memset(&geoObj->buffers, 0, sizeof(geoObj->buffers));
+#endif
 
 
 		/* INCREASE MATERIAL REFERENCE COUNTS */
@@ -515,7 +519,12 @@ MOVertexArrayObject	*vObj;
 				{
 					case	MO_GEOMETRY_SUBTYPE_VERTEXARRAY:
 							vObj = object;
-							MO_DrawGeometry_VertexArray(&vObj->objectData);
+#ifdef __EMSCRIPTEN__
+							if (vObj->retainBuffers)
+								MO_DrawGeometry_VertexArrayBuffered(&vObj->objectData, &vObj->buffers);
+							else
+#endif
+								MO_DrawGeometry_VertexArray(&vObj->objectData);
 							break;
 
 					default:
@@ -585,12 +594,66 @@ int	numChildren,i;
 }
 
 
+#ifdef __EMSCRIPTEN__
+static MOVertexArrayBuffers gStreamingBuffers;
+
+static const void* BindGeometryBuffer(MOVertexArrayBuffers* buffers, int slot, GLenum target,
+									const void* source, size_t size)
+{
+	const uint32_t bit = 1u << slot;
+	if (!buffers->names[slot])
+	{
+		glGenBuffers(1, &buffers->names[slot]);
+		buffers->dirty |= bit;
+	}
+	glBindBuffer(target, buffers->names[slot]);
+	if (size > buffers->capacity[slot])
+	{
+		glBufferData(target, size, source,
+			buffers == &gStreamingBuffers ? GL_STREAM_DRAW : GL_STATIC_DRAW);
+		buffers->capacity[slot] = size;
+	}
+	else if (buffers->dirty & bit)
+	{
+		glBufferSubData(target, 0, size, source);
+	}
+	buffers->dirty &= ~bit;
+	return NULL;	// Vertex/index pointers are offsets into the bound buffer.
+}
+
+void MO_DisposeGeometryBuffers(MOVertexArrayBuffers* buffers)
+{
+	glDeleteBuffers(MO_BUFFER_COUNT, buffers->names);
+	SDL_memset(buffers, 0, sizeof(*buffers));
+}
+
+void MO_DisposeStreamingBuffers(void)
+{
+	MO_DisposeGeometryBuffers(&gStreamingBuffers);
+}
+
+void MO_DrawGeometry_VertexArray(const MOVertexArrayData* data)
+{
+	gStreamingBuffers.dirty = UINT32_MAX;
+	MO_DrawGeometry_VertexArrayBuffered(data, &gStreamingBuffers);
+}
+#endif
+
 /******************** MO: DRAW GEOMETRY - VERTEX ARRAY *************************/
 
+#ifdef __EMSCRIPTEN__
+void MO_DrawGeometry_VertexArrayBuffered(const MOVertexArrayData *data, MOVertexArrayBuffers *buffers)
+#define GEOMETRY_ARRAY(slot, array) BindGeometryBuffer(buffers, slot, GL_ARRAY_BUFFER, array, data->numPoints * sizeof(*(array)))
+#else
 void MO_DrawGeometry_VertexArray(const MOVertexArrayData *data)
+#define GEOMETRY_ARRAY(slot, array) (array)
+#endif
 {
 Boolean		useTexture = false, multiTexture = false;
 uint32_t 	materialFlags;
+
+	if (data->numPoints == 0 || data->numTriangles == 0)
+		return;
 
 
 			/**********************/
@@ -598,7 +661,7 @@ uint32_t 	materialFlags;
 			/**********************/
 
 	glEnableClientState(GL_VERTEX_ARRAY);				// enable vertex arrays
-	glVertexPointer(3, GL_FLOAT, 0, data->points);		// point to point array
+	glVertexPointer(3, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_POINTS, data->points));
 
 	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: glVertexPointer!");
@@ -609,7 +672,7 @@ uint32_t 	materialFlags;
 
 	if (data->normals)									// do we have normals
 	{
-		glNormalPointer(GL_FLOAT, 0, data->normals);
+		glNormalPointer(GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_NORMALS, data->normals));
 		glEnableClientState(GL_NORMAL_ARRAY);			// enable normal arrays
 
 #if 0
@@ -651,13 +714,13 @@ uint32_t 	materialFlags;
 	{
 		if (data->colorsFloat)									// do we have float colors?
 		{
-			glColorPointer(4, GL_FLOAT, 0, data->colorsFloat);
+			glColorPointer(4, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_COLORS_FLOAT, data->colorsFloat));
 			glEnableClientState(GL_COLOR_ARRAY);				// enable color arrays
 		}
 		else
 		if (data->colorsByte)									// no floats, so check bytes
 		{
-			glColorPointer(4, GL_UNSIGNED_BYTE, 0, data->colorsByte);
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, GEOMETRY_ARRAY(MO_BUFFER_COLORS_BYTE, data->colorsByte));
 			glEnableClientState(GL_COLOR_ARRAY);				// enable color arrays
 		}
 		else
@@ -670,13 +733,13 @@ uint32_t 	materialFlags;
 	{
 		if (data->colorsByte)									// do we have byte colors?
 		{
-			glColorPointer(4, GL_UNSIGNED_BYTE, 0, data->colorsByte);
+			glColorPointer(4, GL_UNSIGNED_BYTE, 0, GEOMETRY_ARRAY(MO_BUFFER_COLORS_BYTE, data->colorsByte));
 			glEnableClientState(GL_COLOR_ARRAY);				// enable color arrays
 		}
 		else
 		if (data->colorsFloat)									// no bytes, so check floats
 		{
-			glColorPointer(4, GL_FLOAT, 0, data->colorsFloat);
+			glColorPointer(4, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_COLORS_FLOAT, data->colorsFloat));
 			glEnableClientState(GL_COLOR_ARRAY);				// enable color arrays
 		}
 		else
@@ -719,7 +782,7 @@ uint32_t 	materialFlags;
 				glClientActiveTextureARB(GL_TEXTURE0_ARB+i);
 				glEnable(GL_TEXTURE_2D);
 
-				glTexCoordPointer(2, GL_FLOAT, 0,data->uvs[i]);						// enable uv arrays
+				glTexCoordPointer(2, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_UV0 + i, data->uvs[i]));
 				glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
 				MO_DrawMaterial(data->materials[i]);						// submit material #n
@@ -779,7 +842,7 @@ use_current:
 
 									if (i == 0)
 									{
-										glTexCoordPointer(2, GL_FLOAT, 0,data->uvs[0]);					// enable uv arrays
+										glTexCoordPointer(2, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_UV0, data->uvs[0]));
 										glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 										glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 									}
@@ -871,7 +934,7 @@ use_current:
 							/* JUST 1 TEXTURE LAYER */
 				else
 				{
-					glTexCoordPointer(2, GL_FLOAT, 0,data->uvs[0]);
+					glTexCoordPointer(2, GL_FLOAT, 0, GEOMETRY_ARRAY(MO_BUFFER_UV0, data->uvs[0]));
 					glEnableClientState(GL_TEXTURE_COORD_ARRAY);	// enable uv arrays
 				}
 
@@ -903,12 +966,22 @@ go_here:
 			/* DRAW IT */
 			/***********/
 
-//	glLockArraysEXT(0, data->numPoints);
-	glDrawElements(GL_TRIANGLES,data->numTriangles*3,GL_UNSIGNED_INT,&data->triangles[0]);
+#ifdef __EMSCRIPTEN__
+	const void* indices = BindGeometryBuffer(buffers, MO_BUFFER_INDICES, GL_ELEMENT_ARRAY_BUFFER,
+		data->triangles, data->numTriangles * sizeof(*data->triangles));
+#else
+	const void* indices = data->triangles;
+#endif
+	glDrawElements(GL_TRIANGLES, data->numTriangles * 3, GL_UNSIGNED_INT, indices);
 
 	if (OGL_CHECK_ERROR_PER_DRAW && OGL_CheckError())
 		DoFatalAlert("MO_DrawGeometry_VertexArray: glDrawElements");
-//	glUnlockArraysEXT();
+
+#ifdef __EMSCRIPTEN__
+	// Other renderers still submit CPU arrays and immediate-mode geometry.
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+#endif
 
 	gPolysThisFrame += data->numPoints;					// inc poly counter
 
@@ -931,6 +1004,7 @@ go_here:
 	}
 
 }
+#undef GEOMETRY_ARRAY
 
 
 
@@ -1205,6 +1279,9 @@ MOVertexArrayObject	*vObj;
 					{
 						case	MO_GEOMETRY_SUBTYPE_VERTEXARRAY:
 								vObj = obj;
+#ifdef __EMSCRIPTEN__
+								MO_DisposeGeometryBuffers(&vObj->buffers);
+#endif
 								MO_DeleteObjectInfo_Geometry_VertexArray(&vObj->objectData);
 								break;
 
@@ -1763,6 +1840,9 @@ MOVertexArrayObject	*vObj;
 		uvPtr[i].u += du;
 		uvPtr[i].v += dv;
 	}
+#ifdef __EMSCRIPTEN__
+	vObj->buffers.dirty |= 1u << MO_BUFFER_UV0;
+#endif
 }
 
 

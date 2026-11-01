@@ -247,6 +247,10 @@ void OGL_DisposeWindowSetup(void)
 
 		/* FREE MEMORY & NIL POINTER */
 
+#ifdef __EMSCRIPTEN__
+	MO_DisposeStreamingBuffers();
+#endif
+
 	gGameViewInfoPtr->isActive = false;						// now inactive
 	SafeDisposePtr((Ptr) gGameViewInfoPtr);
 	gGameViewInfoPtr = nil;

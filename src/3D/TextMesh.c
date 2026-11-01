@@ -344,6 +344,9 @@ void TextMesh_Update(const char* text, int align, ObjNode* textNode)
 
 	GAME_ASSERT(metaObjectHeader->type == MO_TYPE_GEOMETRY);
 	GAME_ASSERT(metaObjectHeader->subType == MO_GEOMETRY_SUBTYPE_VERTEXARRAY);
+#ifdef __EMSCRIPTEN__
+	vertexObject->buffers.dirty = UINT32_MAX;
+#endif
 
 	//-----------------------------------
 
@@ -486,6 +489,9 @@ ObjNode *TextMesh_NewEmpty(int capacity, NewObjectDefinitionType* newObjDef)
 
 	// Attach color mesh
 	MetaObjectPtr meshMO = MO_CreateNewObjectOfType(MO_TYPE_GEOMETRY, MO_GEOMETRY_SUBTYPE_VERTEXARRAY, &mesh);
+#ifdef __EMSCRIPTEN__
+	((MOVertexArrayObject*) meshMO)->retainBuffers = true;
+#endif
 
 	CreateBaseGroup(textNode);
 	AttachGeometryToDisplayGroupObject(textNode, meshMO);

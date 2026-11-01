@@ -568,6 +568,9 @@ int		i;
 		/* CREATE THE NEW GEO OBJECT */
 
 	gBG3D_CurrentGeometryObj = MO_CreateNewObjectOfType(MO_TYPE_GEOMETRY, MO_GEOMETRY_SUBTYPE_VERTEXARRAY, &vertexArrayData);
+#ifdef __EMSCRIPTEN__
+	gBG3D_CurrentGeometryObj->retainBuffers = true;
+#endif
 
 	return(gBG3D_CurrentGeometryObj);
 }

@@ -4,6 +4,8 @@
 
 - Ported to SDL 3
 - **NOTE:** The Mac version now requires macOS 10.13.
+- Retain browser geometry buffers and batch consecutive sparkle draws to reduce uploads and draw submissions.
+- Fixed undersized vapor-trail vertex buffers that could crash browser gameplay with an OpenGL error.
 
 ## **4.0.1** (Jan 2023)
 

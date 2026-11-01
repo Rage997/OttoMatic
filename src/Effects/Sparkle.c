@@ -34,6 +34,22 @@ Pool*		gSparklePool = NULL;
 
 static float	gPlayerSparkleColor = 0;
 
+static OGLPoint3D gSparklePoints[MAX_SPARKLES * 4];
+static OGLTextureCoord gSparkleUVs[MAX_SPARKLES * 4];
+static OGLColorRGBA gSparkleColors[MAX_SPARKLES * 4];
+static MOTriangleIndecies gSparkleTriangles[MAX_SPARKLES * 2];
+static MOVertexArrayData gSparkleMesh =
+{
+	.numMaterials = 1,
+	.points = gSparklePoints,
+	.uvs = {gSparkleUVs},
+	.colorsFloat = gSparkleColors,
+	.triangles = gSparkleTriangles,
+};
+#ifdef __EMSCRIPTEN__
+static MOVertexArrayBuffers gSparkleBuffers;
+#endif
+
 /*************************** INIT SPARKLES **********************************/
 
 void InitSparkles(void)
@@ -42,6 +58,17 @@ void InitSparkles(void)
 	gSparklePool = Pool_New(MAX_SPARKLES);
 
 	gPlayerSparkleColor = 0;
+
+	for (int i = 0; i < MAX_SPARKLES; i++)
+	{
+		const GLuint v = i * 4;
+		gSparkleUVs[v + 0] = (OGLTextureCoord) {0, 1};
+		gSparkleUVs[v + 1] = (OGLTextureCoord) {1, 1};
+		gSparkleUVs[v + 2] = (OGLTextureCoord) {1, 0};
+		gSparkleUVs[v + 3] = (OGLTextureCoord) {0, 0};
+		gSparkleTriangles[i * 2 + 0] = (MOTriangleIndecies) {{v, v + 1, v + 2}};
+		gSparkleTriangles[i * 2 + 1] = (MOTriangleIndecies) {{v, v + 2, v + 3}};
+	}
 
 	NewObjectDefinitionType sparkleDrawerDef =
 	{
@@ -58,6 +85,9 @@ void InitSparkles(void)
 
 void DisposeSparkles(void)
 {
+#ifdef __EMSCRIPTEN__
+	MO_DisposeGeometryBuffers(&gSparkleBuffers);
+#endif
 	Pool_Free(gSparklePool);
 	gSparklePool = NULL;
 }
@@ -100,6 +130,19 @@ void DeleteSparkle(int i)
 }
 
 
+static void DrawSparkleBatch(int texture, int count)
+{
+	gSparkleMesh.numPoints = count * 4;
+	gSparkleMesh.numTriangles = count * 2;
+	gSparkleMesh.materials[0] = gSpriteGroupList[SPRITE_GROUP_PARTICLES][texture].materialObject;
+#ifdef __EMSCRIPTEN__
+	gSparkleBuffers.dirty |= (1u << MO_BUFFER_POINTS) | (1u << MO_BUFFER_COLORS_FLOAT);
+	MO_DrawGeometry_VertexArrayBuffered(&gSparkleMesh, &gSparkleBuffers);
+#else
+	MO_DrawGeometry_VertexArray(&gSparkleMesh);
+#endif
+}
+
 /*************************** DRAW SPARKLES ******************************/
 
 static void DrawSparkles(ObjNode* theNode)
@@ -109,7 +152,7 @@ OGLMatrix4x4	m;
 OGLVector3D	v;
 OGLPoint3D	where;
 static const OGLVector3D 	up = {0,1,0};
-OGLPoint3D					tc[4], *cameraLocation;
+OGLPoint3D					*cameraLocation;
 static OGLPoint3D		frame[4] =
 {
 	{-130,	130,	0},
@@ -140,6 +183,8 @@ static OGLPoint3D		frame[4] =
 			/*********************/
 
 	cameraLocation = &gGameViewInfoPtr->cameraPlacement.cameraLocation;		// point to camera coord
+	int batchTexture = -1;
+	int batchCount = 0;
 
 	for (int i = Pool_First(gSparklePool); i >= 0; i = Pool_Next(gSparklePool, i))
 	{
@@ -200,40 +245,39 @@ static OGLPoint3D		frame[4] =
 		frame[3].x = -gSparkles[i].scale;
 		frame[3].y = -gSparkles[i].scale;
 
-		SetLookAtMatrixAndTranslate(&m, &up, &where, cameraLocation);	// aim at camera & translate
-		OGLPoint3D_TransformArray(&frame[0], &m, tc, 4);
 
 
 
-			/* DRAW IT */
-
-		MO_DrawMaterial(gSpriteGroupList[SPRITE_GROUP_PARTICLES][gSparkles[i].textureNum].materialObject);	// submit material
-
-		if (flags & SPARKLE_FLAG_FLICKER)								// set transparency
+		// Batch consecutive equal textures without changing transparency order.
+		OGLColorRGBA color = gSparkles[i].color;
+		if (flags & SPARKLE_FLAG_FLICKER)
 		{
-			OGLColorRGBA	c = gSparkles[i].color;
-
-			c.a += RandomFloat2() * .5f;
-			if (c.a < 0.0)
+			color.a += RandomFloat2() * .5f;
+			if (color.a < 0.0f)
 				continue;
-			else
-			if (c.a > 1.0f)
-				c.a = 1.0;
-
-			SetColor4fv(&c.r);
+			if (color.a > 1.0f)
+				color.a = 1.0f;
 		}
-		else
-			SetColor4fv(&gSparkles[i].color.r);
 
+		const int texture = gSparkles[i].textureNum;
+		if (batchCount && texture != batchTexture)
+		{
+			DrawSparkleBatch(batchTexture, batchCount);
+			batchCount = 0;
+		}
+		batchTexture = texture;
 
-		glBegin(GL_QUADS);
-		glTexCoord2f(0,1);	glVertex3fv(&tc[0].x);
-		glTexCoord2f(1,1);	glVertex3fv(&tc[1].x);
-		glTexCoord2f(1,0);	glVertex3fv(&tc[2].x);
-		glTexCoord2f(0,0);	glVertex3fv(&tc[3].x);
-		glEnd();
+		const int first = batchCount * 4;
+		SetLookAtMatrixAndTranslate(&m, &up, &where, cameraLocation);
+		OGLPoint3D_TransformArray(frame, &m, &gSparklePoints[first], 4);
+		for (int vtx = 0; vtx < 4; vtx++)
+			gSparkleColors[first + vtx] = color;
+		batchCount++;
 	}
 
+
+	if (batchCount)
+		DrawSparkleBatch(batchTexture, batchCount);
 
 			/* RESTORE STATE */
 

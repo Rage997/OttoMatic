@@ -139,11 +139,36 @@ typedef struct
 	OGLColorRGBA		*colorsFloat;
 	MOTriangleIndecies	*triangles;						// ptr to array of triangle triad indecies
 }MOVertexArrayData;
+
+#ifdef __EMSCRIPTEN__
+enum
+{
+	MO_BUFFER_POINTS,
+	MO_BUFFER_NORMALS,
+	MO_BUFFER_UV0,
+	MO_BUFFER_COLORS_BYTE = MO_BUFFER_UV0 + MAX_MATERIAL_LAYERS,
+	MO_BUFFER_COLORS_FLOAT,
+	MO_BUFFER_INDICES,
+	MO_BUFFER_COUNT
+};
+
+typedef struct
+{
+	GLuint names[MO_BUFFER_COUNT];
+	size_t capacity[MO_BUFFER_COUNT];
+	uint32_t dirty;
+} MOVertexArrayBuffers;
+#endif
 		
 typedef struct
 {
 	MetaObjectHeader	objectHeader;
 	MOVertexArrayData	objectData;
+#ifdef __EMSCRIPTEN__
+	// Only explicitly retained meshes may skip uploads. Other meshes stream.
+	Boolean retainBuffers;
+	MOVertexArrayBuffers buffers;
+#endif
 }MOVertexArrayObject;
 
 
@@ -198,6 +223,11 @@ MetaObjectPtr MO_GetNewReference(MetaObjectPtr mo);
 void MO_AppendToGroup(MOGroupObject *group, MetaObjectPtr newObject);
 void MO_AttachToGroupStart(MOGroupObject *group, MetaObjectPtr newObject);
 void MO_DrawGeometry_VertexArray(const MOVertexArrayData *data);
+#ifdef __EMSCRIPTEN__
+void MO_DrawGeometry_VertexArrayBuffered(const MOVertexArrayData *data, MOVertexArrayBuffers *buffers);
+void MO_DisposeGeometryBuffers(MOVertexArrayBuffers *buffers);
+void MO_DisposeStreamingBuffers(void);
+#endif
 void MO_DrawGroup(const MOGroupObject *object);
 void MO_DrawObject(const MetaObjectPtr object);
 void MO_DrawMaterial(MOMaterialObject *matObj);

@@ -91,6 +91,9 @@ OGLVector3D		gRecentTerrainNormal;							// from _Planar
 		/* MASTER ARRAYS FOR ALL SUPERTILE DATA FOR CURRENT LEVEL */
 
 static MOVertexArrayData		*gSuperTileMeshData = nil;
+#ifdef __EMSCRIPTEN__
+static MOVertexArrayBuffers gSuperTileBuffers[MAX_SUPERTILES];
+#endif
 static OGLPoint3D				*gSuperTileCoords = nil;
 static MOTriangleIndecies		*gSuperTileTriangles = nil;
 static OGLTextureCoord			*gSuperTileUVs = nil;
@@ -447,6 +450,11 @@ void DisposeSuperTileMemoryList(void)
 
 			/* NUKE ALL MASTER ARRAYS WHICH WILL FREE UP ALL SUPERTILE MEMORY */
 
+#ifdef __EMSCRIPTEN__
+	for (int i = 0; i < MAX_SUPERTILES; i++)
+		MO_DisposeGeometryBuffers(&gSuperTileBuffers[i]);
+#endif
+
 	if (gSuperTileMeshData)
 		SafeDisposePtr((Ptr)gSuperTileMeshData);
 	gSuperTileMeshData = nil;
@@ -531,6 +539,9 @@ OGLVector3D			*vertexNormals = nil;
 
 	superTileNum = GetFreeSuperTileMemory();						// get memory block for the data
 	superTilePtr = &gSuperTileMemoryList[superTileNum];				// get ptr to it
+#ifdef __EMSCRIPTEN__
+	gSuperTileBuffers[superTileNum].dirty = UINT32_MAX;
+#endif
 
 	superTilePtr->x = (startCol * TERRAIN_POLYGON_SIZE) + (TERRAIN_SUPERTILE_UNIT_SIZE/2);		// also remember world coords
 	superTilePtr->z = (startRow * TERRAIN_POLYGON_SIZE) + (TERRAIN_SUPERTILE_UNIT_SIZE/2);
@@ -969,7 +980,11 @@ Boolean			superTileVisible;
 
 					/* SUBMIT THE GEOMETRY */
 
+#ifdef __EMSCRIPTEN__
+				MO_DrawGeometry_VertexArrayBuffered(gSuperTileMemoryList[i].meshData, &gSuperTileBuffers[i]);
+#else
 				MO_DrawGeometry_VertexArray(gSuperTileMemoryList[i].meshData);
+#endif
 				gNumSuperTilesDrawn++;
 			}
 		}
@@ -1199,6 +1214,11 @@ float	oneOverWaveLength,r,rw,dampenRatio;
 			/*************************/
 			/* UPDATE VERTEX NORMALS */
 			/*************************/
+
+#ifdef __EMSCRIPTEN__
+	gSuperTileBuffers[superTile - gSuperTileMemoryList].dirty |=
+		(1u << MO_BUFFER_POINTS) | (1u << MO_BUFFER_NORMALS);
+#endif
 
 	CalculateSupertileVertexNormals(superTile->meshData, startRow, startCol);
 
