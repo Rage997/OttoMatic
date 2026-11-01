@@ -4,6 +4,7 @@
 
 - Ported to SDL 3
 - **NOTE:** The Mac version now requires macOS 10.13.
+- Moved browser sound playback and mixing off the rendering thread so long frames no longer drain the audio queue.
 - Retain browser geometry buffers and batch consecutive sparkle draws to reduce uploads and draw submissions.
 - Fixed undersized vapor-trail vertex buffers that could crash browser gameplay with an OpenGL error.
 

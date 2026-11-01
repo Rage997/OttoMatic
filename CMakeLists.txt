@@ -95,6 +95,13 @@ endif()
 
 add_subdirectory(extern/Pomme)
 
+if(EMSCRIPTEN)
+	get_target_property(POMME_SOURCES Pomme SOURCES)
+	list(FILTER POMME_SOURCES EXCLUDE REGEX "(^|/)SoundMixer/cmixer\\.cpp$")
+	set_property(TARGET Pomme PROPERTY SOURCES "${POMME_SOURCES}")
+	target_sources(Pomme PRIVATE "${CMAKE_SOURCE_DIR}/web/PommeAudio.cpp")
+endif()
+
 find_package(OpenGL REQUIRED)
 
 #------------------------------------------------------------------------------
