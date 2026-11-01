@@ -1,26 +1,22 @@
-name: Web build
+name: Web Build and GitHub Pages
 
 on:
-  workflow_dispatch:
-    inputs:
-      deploy:
-        description: Deploy to GitHub Pages (enable Pages with GitHub Actions first)
-        type: boolean
-        default: false
+  push:
+    branches: [master]
   pull_request:
-    paths:
-      - 'src/**'
-      - 'web/**'
-      - 'CMakeLists.txt'
-      - '.github/workflows/WebBuild.yml'
-      - '.gitmodules'
-      - 'extern/Pomme'
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: web-pages-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build WebAssembly
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,12 +46,13 @@ jobs:
           path: _site/
           if-no-files-found: error
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name == 'workflow_dispatch' && inputs.deploy
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         with:
           path: _site/
 
   deploy:
-    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    name: Deploy GitHub Pages
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -68,6 +65,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

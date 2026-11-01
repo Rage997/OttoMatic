@@ -1,4 +1,4 @@
 [submodule "extern/Pomme"]
 	path = extern/Pomme
-	url = git@github.com:Rage997/Pomme.git
+	url = https://github.com/Rage997/Pomme.git
 	branch = fix/reuse-existing-sdl3-target

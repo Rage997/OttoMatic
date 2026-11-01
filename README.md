@@ -45,14 +45,12 @@ Otto Matic is being re-released here (https://github.com/jorio/ottomatic) under 
 
 © 2001 Pangea Software, Inc. Otto Matic is a trademark of Pangea Software, Inc. Portions © 2021 Iliyas Jorio.
 
-## Other Pangea game ports
+## Other Pangea game web ports
 
-If you like games by Pangea Software, you might enjoy my other ports:
+Play my other Pangea web ports in your browser:
 
-- [Billy Frontier](https://github.com/jorio/BillyFrontier)
-- [Bugdom](https://github.com/jorio/Bugdom)
-- [Cro-Mag Rally](https://github.com/jorio/CroMagRally)
-- [Mighty Mike (Power Pete)](https://github.com/jorio/MightyMike)
-- [Nanosaur](https://github.com/jorio/Nanosaur)
-- [Nanosaur II](https://github.com/jorio/Nanosaur2)
-- [Otto Matic](https://github.com/jorio/OttoMatic)
+- [Bugdom](https://niccolozuppichini.com/Bugdom/)
+- [Cro-Mag Rally](https://niccolozuppichini.com/CroMagRally/)
+- [Mighty Mike (Power Pete)](https://niccolozuppichini.com/MightyMike/)
+- [Nanosaur](https://niccolozuppichini.com/Nanosaur/)
+- [Nanosaur II](https://niccolozuppichini.com/Nanosaur2/)
